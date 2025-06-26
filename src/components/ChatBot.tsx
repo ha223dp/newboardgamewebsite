@@ -21,7 +21,6 @@ const ChatBot: React.FC<ChatBotProps> = ({ isVisible, onClose, onGameSelect }) =
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [lastRequestTime, setLastRequestTime] = useState<number>(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -53,98 +52,38 @@ const ChatBot: React.FC<ChatBotProps> = ({ isVisible, onClose, onGameSelect }) =
     return foundGames;
   };
 
-  const callOpenAI = async (userMessage: string, conversationHistory: ChatMessage[]): Promise<string> => {
-    try {
-      // Use import.meta.env for Vite projects
-      const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
-      
-      // Debug logging
-      console.log('API Key exists:', !!apiKey);
-      console.log('API Key prefix:', apiKey?.substring(0, 7));
-      
-      if (!apiKey) {
-        throw new Error('OpenAI API key not found in environment variables');
-      }
-      
-      if (!apiKey.startsWith('sk-')) {
-        throw new Error('Invalid OpenAI API key format. Key should start with "sk-"');
-      }
-
-      // Prepare conversation context for OpenAI
-      const systemPrompt = `You are an expert board game recommendation assistant. You have access to a curated collection of board games with the following data:
-
-${JSON.stringify(boardGames, null, 2)}
-
-Your role is to:
-1. Recommend games based on user preferences (player count, time, complexity, theme, etc.)
-2. Explain WHY each game fits their criteria
-3. Provide helpful details about gameplay, mechanics, and what makes each game special
-4. Be conversational and enthusiastic about board games
-5. When recommending games, mention their exact names clearly so users can learn more
-
-IMPORTANT: When mentioning specific games from the collection, use their EXACT names as they appear in the data. This helps users identify and learn more about the games.
-
-Be helpful, knowledgeable, and passionate about board games!`;
-
-      // Convert conversation history to OpenAI format
-      const messages = [
-        { role: 'system', content: systemPrompt },
-        ...conversationHistory.slice(-6).map(msg => ({
+ const callBackendAPI = async (userMessage: string, conversationHistory: ChatMessage[]): Promise<string> => {
+  try {
+    const response = await fetch('http://localhost:5000/api/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        message: userMessage,
+        conversationHistory: conversationHistory.slice(-6).map(msg => ({
           role: msg.isUser ? 'user' : 'assistant',
           content: msg.text
-        })),
-        { role: 'user', content: userMessage }
-      ];
+        }))
+      })
+    });
 
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'gpt-3.5-turbo',
-          messages: messages,
-          max_tokens: 500,
-          temperature: 0.7,
-          presence_penalty: 0.1,
-          frequency_penalty: 0.1,
-        }),
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error('Invalid API key. Please check your OpenAI API key.');
-        } else if (response.status === 429) {
-          throw new Error('Rate limit reached. Please wait 60 seconds before trying again.');
-        } else if (response.status === 402) {
-          throw new Error('OpenAI account has insufficient credits. Please check your billing.');
-        } else if (response.status >= 500) {
-          throw new Error('OpenAI servers are experiencing issues. Please try again later.');
-        } else {
-          throw new Error(`API error: ${response.status}`);
-        }
-      }
-
-      const data = await response.json();
-      return data.choices[0].message.content;
-    } catch (error) {
-      console.error('OpenAI API Error:', error);
-      if (error instanceof Error) {
-        throw error;
-      }
-      throw new Error('Failed to get AI response. Please try again.');
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error?.error || `Request failed with status ${response.status}`);
     }
-  };
+
+    const data = await response.json();
+    return data.response;
+  } catch (err) {
+    console.error('API error:', err);
+    return 'Sorry, something went wrong while contacting the assistant.';
+  }
+};
+
 
   const handleSendMessage = async () => {
     if (!inputText.trim() || isTyping) return;
-
-    // Check if API key is configured
-    if (!import.meta.env.VITE_OPENAI_API_KEY) {
-      setError('OpenAI API key not configured. Please add VITE_OPENAI_API_KEY to your environment variables.');
-      return;
-    }
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
@@ -154,13 +93,14 @@ Be helpful, knowledgeable, and passionate about board games!`;
     };
 
     setMessages(prev => [...prev, userMessage]);
+    const currentInput = inputText;
     setInputText('');
     setIsTyping(true);
     setError(null);
 
     try {
-      const aiResponse = await callOpenAI(inputText, messages);
-
+      const aiResponse = await callBackendAPI(currentInput, messages);
+      
       const botResponse: ChatMessage = {
         id: (Date.now() + 1).toString(),
         text: aiResponse,
@@ -170,22 +110,23 @@ Be helpful, knowledgeable, and passionate about board games!`;
 
       setMessages(prev => [...prev, botResponse]);
 
-      // Find games mentioned in the AI response and add clickable cards
+      // Find games mentioned in the AI response and add them as clickable cards
       const mentionedGames = findGamesByName(aiResponse);
       
-      // Add game cards for mentioned games (with a slight delay for better UX)
-      mentionedGames.forEach((game, index) => {
+      if (mentionedGames.length > 0) {
+        // Add a follow-up message with game cards
+        const gameCardsMessage: ChatMessage = {
+          id: (Date.now() + 2).toString(),
+          text: `Here ${mentionedGames.length === 1 ? 'is the game' : 'are the games'} I mentioned:`,
+          isUser: false,
+          timestamp: new Date(),
+          recommendedGames: mentionedGames // Add the games to the message
+        };
+        
         setTimeout(() => {
-          const gameMessage: ChatMessage = {
-            id: `game-${Date.now()}-${index}`,
-            text: `🎯 **${game.name}** (${game.players} players, ${game.playTime}, Difficulty: ${game.difficulty}/5)\n${game.description.slice(0, 120)}...`,
-            isUser: false,
-            timestamp: new Date(),
-            gameLink: game.id
-          };
-          setMessages(prev => [...prev, gameMessage]);
-        }, (index + 1) * 300);
-      });
+          setMessages(prev => [...prev, gameCardsMessage]);
+        }, 500);
+      }
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Something went wrong. Please try again.';
@@ -194,9 +135,14 @@ Be helpful, knowledgeable, and passionate about board games!`;
       // Add fallback response
       const fallbackResponse: ChatMessage = {
         id: (Date.now() + 1).toString(),
-        text: "I'm having trouble connecting to my AI brain right now. Let me give you some popular recommendations while I recover: Ticket to Ride for families, Azul for strategy lovers, and Codenames for parties!",
+        text: "I'm having trouble connecting to my AI brain right now. Let me give you some popular recommendations while I recover:",
         isUser: false,
-        timestamp: new Date()
+        timestamp: new Date(),
+        recommendedGames: [
+          boardGames.find(g => g.name.toLowerCase().includes('ticket to ride')),
+          boardGames.find(g => g.name.toLowerCase().includes('azul')),
+          boardGames.find(g => g.name.toLowerCase().includes('codenames'))
+        ].filter(Boolean) as Game[]
       };
       setMessages(prev => [...prev, fallbackResponse]);
     } finally {
@@ -204,15 +150,46 @@ Be helpful, knowledgeable, and passionate about board games!`;
     }
   };
 
-  const handleGameClick = (gameId: string) => {
-    const game = boardGames.find(g => g.id === gameId);
-    if (game) {
-      onGameSelect(game);
-      onClose();
-    }
+  const handleGameClick = (game: Game) => {
+    onGameSelect(game);
+    onClose();
   };
 
   const clearError = () => setError(null);
+
+  // Component for rendering game cards in chat
+  const GameCard: React.FC<{ game: Game }> = ({ game }) => (
+    <div 
+      onClick={() => handleGameClick(game)}
+      className="bg-gradient-to-br from-amber-50 to-yellow-50 border-2 border-amber-200 rounded-lg p-3 cursor-pointer hover:shadow-md transition-all duration-200 hover:scale-105"
+    >
+      <div className="flex items-start space-x-3">
+        <img 
+          src={game.image} 
+          alt={game.name}
+          className="w-16 h-16 rounded-lg object-cover flex-shrink-0"
+        />
+        <div className="flex-1 min-w-0">
+          <h4 className="font-semibold text-amber-900 text-sm truncate">{game.name}</h4>
+          <div className="flex items-center space-x-2 text-xs text-gray-600 mt-1">
+            <span>{game.players} players</span>
+            <span>•</span>
+            <span>{game.playTime}</span>
+          </div>
+          <div className="flex items-center justify-between mt-2">
+            <div className="flex items-center space-x-1">
+              <span className="text-yellow-500">★</span>
+              <span className="text-xs text-gray-600">{game.rating}</span>
+            </div>
+            <button className="text-xs text-green-600 hover:text-green-700 font-medium flex items-center space-x-1">
+              <span>View Details</span>
+              <ExternalLink size={10} />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 
   if (!isVisible) return null;
 
@@ -254,33 +231,32 @@ Be helpful, knowledgeable, and passionate about board games!`;
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {messages.map((message) => (
-            <div
-              key={message.id}
-              className={`flex ${message.isUser ? 'justify-end' : 'justify-start'}`}
-            >
-              <div className={`flex items-start space-x-2 max-w-[85%] ${message.isUser ? 'flex-row-reverse space-x-reverse' : ''}`}>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                  message.isUser ? 'bg-blue-500' : 'bg-green-500'
-                }`}>
-                  {message.isUser ? <User size={16} className="text-white" /> : <Bot size={16} className="text-white" />}
-                </div>
-                <div className={`p-3 rounded-xl ${
-                  message.isUser 
-                    ? 'bg-blue-500 text-white rounded-br-sm' 
-                    : 'bg-white border-2 border-green-100 text-gray-800 rounded-bl-sm shadow-sm'
-                }`}>
-                  <p className="text-sm whitespace-pre-wrap leading-relaxed">{message.text}</p>
-                  {message.gameLink && (
-                    <button
-                      onClick={() => handleGameClick(message.gameLink!)}
-                      className="mt-2 flex items-center space-x-1 text-green-600 hover:text-green-700 text-xs font-medium hover:bg-green-50 px-2 py-1 rounded transition-colors"
-                    >
-                      <span>View Game Details</span>
-                      <ExternalLink size={12} />
-                    </button>
-                  )}
+            <div key={message.id}>
+              <div className={`flex ${message.isUser ? 'justify-end' : 'justify-start'}`}>
+                <div className={`flex items-start space-x-2 max-w-[85%] ${message.isUser ? 'flex-row-reverse space-x-reverse' : ''}`}>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                    message.isUser ? 'bg-blue-500' : 'bg-green-500'
+                  }`}>
+                    {message.isUser ? <User size={16} className="text-white" /> : <Bot size={16} className="text-white" />}
+                  </div>
+                  <div className={`p-3 rounded-xl ${
+                    message.isUser 
+                      ? 'bg-blue-500 text-white rounded-br-sm' 
+                      : 'bg-white border-2 border-green-100 text-gray-800 rounded-bl-sm shadow-sm'
+                  }`}>
+                    <p className="text-sm whitespace-pre-wrap leading-relaxed">{message.text}</p>
+                  </div>
                 </div>
               </div>
+              
+              {/* Render game cards if this message has recommended games */}
+              {message.recommendedGames && message.recommendedGames.length > 0 && (
+                <div className="mt-3 ml-10 space-y-2">
+                  {message.recommendedGames.map((game) => (
+                    <GameCard key={game.id} game={game} />
+                  ))}
+                </div>
+              )}
             </div>
           ))}
           

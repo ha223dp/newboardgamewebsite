@@ -11,8 +11,8 @@ export const boardGames: Game[] = [
     learningCurve: 2,
     category: ['Strategy', 'Trading', 'Family'],
     image: 'src/data/pictures/catan.avif',
-    youtubeUrl: 'https://www.youtube.com/watch?v=o3WJf6UBdzw',
-    manualUrl: 'https://www.catan.com/sites/default/files/2021-06/catan_base_rules_2020_200408.pdf',
+    youtubeUrl: 'https://www.youtube.com/watch?v=oiQ6SgBzfqY&pp=ygURY2F0YW4gaG93IHRvIHBsYXk%3D',
+    manualUrl: 'https://www.catan.com/sites/default/files/2021-06/catan_base_rules_2020_200707.pdf',
     rating: 4.5
   },
   {
@@ -567,6 +567,15 @@ export const boardGames: Game[] = [
   }
 
 ];
+
+export interface ChatMessage {
+  id: string;
+  text: string;
+  isUser: boolean;
+  timestamp: Date;
+  gameLink?: string; // Keep this for backward compatibility
+  recommendedGames?: Game[]; // New field for multiple game recommendations
+}
 
 export const gameCategories = [
  'All Games',

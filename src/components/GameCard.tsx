@@ -1,7 +1,7 @@
 import React from 'react';
 import { Clock, Users, Star, ExternalLink, FileText, Youtube } from 'lucide-react';
 import { Game } from '../types/Game';
-import.meta.env.VITE_OPENAI_API_KEY
+import.meta.env.OPENAI_API_KEY
 
 interface GameCardProps {
   game: Game;

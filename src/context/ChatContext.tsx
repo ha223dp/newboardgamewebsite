@@ -50,7 +50,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const callOpenAI = async (userMessage: string, conversationHistory: ChatMessage[]): Promise<string> => {
     try {
       // Use import.meta.env for Vite projects
-      const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+      const apiKey = import.meta.env.OPENAI_API_KEY;
       
       if (!apiKey) {
         throw new Error('OpenAI API key not found in environment variables');
