@@ -109,17 +109,18 @@ function App() {
       />
 
       <main className="pt-20 pb-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Hero Section with Integrated Search */}
-          <div className="text-center mb-12 py-8">
-           <h1 className="text-5xl md:text-6xl font-bold text-amber-900 mb-4" 
-    style={{ fontFamily: 'Bebas Neue, Arial, sans-serif', letterSpacing: '0.05em' }}>
-  Welcome to the Game Table
-</h1>
-            <p className="text-xl text-amber-800 max-w-3xl mx-auto leading-relaxed mb-8">
-              Discover your next favorite board game adventure. From strategic masterpieces to party favorites, 
-              find the perfect game for every occasion and every group size.
-            </p>
+  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    {/* Hero Section with Integrated Search */}
+    <div className="text-center mb-12 py-8">
+      <h1 className="mb-4 text-3xl font-extrabold text-gray-900 dark:text-white md:text-5xl lg:text-6xl">
+        <span className="text-transparent bg-clip-text bg-gradient-to-r to-amber-600 from-orange-400">
+          Welcome to the Game Table
+        </span>
+      </h1>
+      <p className="text-lg font-normal text-gray-500 lg:text-xl dark:text-gray-400 max-w-3xl mx-auto leading-relaxed">
+        Discover your next favorite board game adventure. From strategic masterpieces to party favorites, 
+        find the perfect game for every occasion and every group size.
+      </p>
             
             {/* Integrated Search Bar */}
             <div className="max-w-2xl mx-auto">
