@@ -24,8 +24,10 @@ const ChatBot: React.FC<ChatBotProps> = ({ isVisible, onClose, onGameSelect }) =
   const [isBackendOnline, setIsBackendOnline] = useState<boolean | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const API_BASE_URL = 'http://localhost:5000';
-
+const API_BASE_URL = process.env.NODE_ENV === 'production' 
+  ? '' // Use relative URLs in production (same domain)
+  : 'http://localhost:5000'; // Use localhost in development
+  
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };

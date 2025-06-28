@@ -13,7 +13,13 @@ const PORT = process.env.PORT || 5000;
 
 // ✅ CORS middleware — configure it BEFORE any routes
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:5174'], // Common dev ports
+  origin: [
+    'http://localhost:3000', 
+    'http://localhost:5173', 
+    'http://localhost:5174',
+    /^https:\/\/.*\.vercel\.app$/, // Allow all Vercel preview deployments
+    'https://boardgamewebsite.vercel.app/' // Replace with your actual Vercel domain
+  ],
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
