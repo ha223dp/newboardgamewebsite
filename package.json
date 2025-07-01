@@ -1,16 +1,13 @@
 {
-  "name": "vite-react-typescript-starter",
+  "name": "boardgame-website",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "start": "node index.js",
     "dev": "vite",
-    "build": "vite build",
-    "vercel-build": "vite build",
-    "preview": "vite preview",
-    "server": "node server.js",
-    "server:dev": "nodemon server.js"
+    "dev:backend": "cd backend && npm run dev",
+    "dev:full": "concurrently \"npm run dev:backend\" \"npm run dev\"",
+    "build": "vite build"
   },
   "dependencies": {
     "lucide-react": "^0.344.0",
@@ -26,6 +23,7 @@
     "@types/uuid": "^10.0.0",
     "@vitejs/plugin-react": "^4.3.1",
     "autoprefixer": "^10.4.18",
+    "concurrently": "^8.2.2",
     "eslint": "^9.9.1",
     "eslint-plugin-react-hooks": "^5.1.0-rc.0",
     "eslint-plugin-react-refresh": "^0.4.11",

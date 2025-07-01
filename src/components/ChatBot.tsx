@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Send, Bot, User, ExternalLink, AlertCircle, RefreshCw } from 'lucide-react';
+import { X, Send, Bot, User, ExternalLink, AlertCircle } from 'lucide-react';
 import { ChatMessage, Game } from '../types/Game';
 import { boardGames } from '../data/games';
 
@@ -21,24 +21,21 @@ const ChatBot: React.FC<ChatBotProps> = ({ isVisible, onClose, onGameSelect }) =
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isBackendOnline, setIsBackendOnline] = useState<boolean | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-const API_BASE_URL = (() => {
-  // Check if we're in development
-  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-    return 'http://localhost:5000';
-  }
-  // In production, use relative URLs (same domain)
-  return '';
-})();
-
-// Alternative simpler approach:
-// const API_BASE_URL = window.location.hostname === 'localhost' 
-//   ? 'http://localhost:5000' 
-//   : '';
-
-console.log('🔗 API Base URL:', API_BASE_URL);
+  // Updated API URL function for both local development and Vercel deployment
+  const getApiUrl = () => {
+    if (typeof window !== 'undefined') {
+      // In production (Vercel), use the same domain
+      if (window.location.hostname.includes('vercel.app') || 
+          (!window.location.hostname.includes('localhost') && !window.location.hostname.includes('127.0.0.1'))) {
+        return window.location.origin;
+      }
+      // For local development, Vite proxy will handle /api routes
+      return ''; // Empty string means relative URL, Vite proxy will handle it
+    }
+    return '';
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -47,38 +44,6 @@ console.log('🔗 API Base URL:', API_BASE_URL);
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
-
-  // Check backend connectivity when component mounts
-  useEffect(() => {
-    if (isVisible) {
-      checkBackendHealth();
-    }
-  }, [isVisible]);
-
-  const checkBackendHealth = async () => {
-    try {
-      console.log('🔍 Checking backend health...');
-      const response = await fetch(`${API_BASE_URL}/api/health`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('✅ Backend health check passed:', data);
-        setIsBackendOnline(true);
-        setError(null);
-      } else {
-        throw new Error(`Backend returned status ${response.status}`);
-      }
-    } catch (err) {
-      console.error('❌ Backend health check failed:', err);
-      setIsBackendOnline(false);
-      setError('Cannot connect to backend server. Make sure it\'s running on localhost:5000');
-    }
-  };
 
   const findGamesByName = (text: string): Game[] => {
     const foundGames: Game[] = [];
@@ -102,94 +67,37 @@ console.log('🔗 API Base URL:', API_BASE_URL);
   };
 
   const callBackendAPI = async (userMessage: string, conversationHistory: ChatMessage[]): Promise<string> => {
-    console.log('🚀 Calling backend API...');
-    console.log('- Message:', userMessage.substring(0, 50) + '...');
-    console.log('- History length:', conversationHistory.length);
-    console.log('- API URL:', `${API_BASE_URL}/api/chat`);
-
     try {
-      const requestBody = {
-        message: userMessage,
-        conversationHistory: conversationHistory.slice(-6).map(msg => ({
-          role: msg.isUser ? 'user' : 'assistant',
-          content: msg.text
-        }))
-      };
-
-      console.log('📤 Request body:', JSON.stringify(requestBody, null, 2));
-
-      const response = await fetch(`${API_BASE_URL}/api/chat`, {
+      const apiUrl = getApiUrl();
+      const response = await fetch(`${apiUrl}/api/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(requestBody)
+        body: JSON.stringify({
+          message: userMessage,
+          conversationHistory: conversationHistory.slice(-6).map(msg => ({
+            role: msg.isUser ? 'user' : 'assistant',
+            content: msg.text
+          }))
+        })
       });
 
-      console.log('📥 Response status:', response.status);
-      console.log('📥 Response headers:', Object.fromEntries(response.headers.entries()));
-
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ API Error Response:', errorText);
-        
-        let errorData;
-        try {
-          errorData = JSON.parse(errorText);
-        } catch {
-          errorData = { error: errorText };
-        }
-
-        // Handle specific error cases
-        if (response.status === 500 && errorData.error?.includes('API key')) {
-          throw new Error('OpenAI API key is not configured correctly. Please check your backend setup.');
-        } else if (response.status === 500 && errorData.error?.includes('rate limit')) {
-          throw new Error('API rate limit exceeded. Please wait a moment and try again.');
-        } else if (response.status === 400) {
-          throw new Error('Invalid request format. Please try rephrasing your message.');
-        }
-
-        throw new Error(errorData?.error || `Server error: ${response.status}`);
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error?.error || `Request failed with status ${response.status}`);
       }
 
-      const responseText = await response.text();
-      console.log('📥 Raw response:', responseText.substring(0, 200) + '...');
-
-      let data;
-      try {
-        data = JSON.parse(responseText);
-      } catch (parseError) {
-        console.error('❌ JSON parse error:', parseError);
-        throw new Error('Invalid response format from server');
-      }
-
-      if (!data.response) {
-        console.error('❌ Missing response field:', data);
-        throw new Error('Invalid response structure from server');
-      }
-
-      console.log('✅ API call successful');
+      const data = await response.json();
       return data.response;
-
     } catch (err) {
-      console.error('❌ API call failed:', err);
-      
-      if (err instanceof TypeError && err.message.includes('fetch')) {
-        throw new Error('Cannot connect to backend server. Please make sure it\'s running on localhost:5000');
-      }
-      
-      throw err;
+      console.error('API error:', err);
+      throw new Error('Sorry, something went wrong while contacting the assistant.');
     }
   };
 
   const handleSendMessage = async () => {
     if (!inputText.trim() || isTyping) return;
-
-    // Check backend connectivity first
-    if (isBackendOnline === false) {
-      setError('Backend server is not running. Please start the server and try again.');
-      return;
-    }
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
@@ -226,7 +134,7 @@ console.log('🔗 API Base URL:', API_BASE_URL);
           text: `Here ${mentionedGames.length === 1 ? 'is the game' : 'are the games'} I mentioned:`,
           isUser: false,
           timestamp: new Date(),
-          recommendedGames: mentionedGames
+          recommendedGames: mentionedGames // Add the games to the message
         };
         
         setTimeout(() => {
@@ -234,36 +142,23 @@ console.log('🔗 API Base URL:', API_BASE_URL);
         }, 500);
       }
 
-      // Update backend status on successful call
-      if (isBackendOnline !== true) {
-        setIsBackendOnline(true);
-      }
-
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Something went wrong. Please try again.';
-      console.error('💥 Message handling error:', errorMessage);
       setError(errorMessage);
       
-      // Update backend status if it's a connectivity issue
-      if (errorMessage.includes('Cannot connect to backend')) {
-        setIsBackendOnline(false);
-      }
-      
-      // Add fallback response for certain errors
-      if (errorMessage.includes('API key') || errorMessage.includes('backend')) {
-        const fallbackResponse: ChatMessage = {
-          id: (Date.now() + 1).toString(),
-          text: "I'm having trouble connecting to my AI brain right now. Let me give you some popular recommendations while we work on fixing this:",
-          isUser: false,
-          timestamp: new Date(),
-          recommendedGames: [
-            boardGames.find(g => g.name.toLowerCase().includes('ticket to ride')),
-            boardGames.find(g => g.name.toLowerCase().includes('azul')),
-            boardGames.find(g => g.name.toLowerCase().includes('codenames'))
-          ].filter(Boolean) as Game[]
-        };
-        setMessages(prev => [...prev, fallbackResponse]);
-      }
+      // Add fallback response
+      const fallbackResponse: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        text: "I'm having trouble connecting to my AI brain right now. Let me give you some popular recommendations while I recover:",
+        isUser: false,
+        timestamp: new Date(),
+        recommendedGames: [
+          boardGames.find(g => g.name.toLowerCase().includes('ticket to ride')),
+          boardGames.find(g => g.name.toLowerCase().includes('azul')),
+          boardGames.find(g => g.name.toLowerCase().includes('codenames'))
+        ].filter(Boolean) as Game[]
+      };
+      setMessages(prev => [...prev, fallbackResponse]);
     } finally {
       setIsTyping(false);
     }
@@ -275,12 +170,6 @@ console.log('🔗 API Base URL:', API_BASE_URL);
   };
 
   const clearError = () => setError(null);
-
-  const handleRetryConnection = () => {
-    setError(null);
-    setIsBackendOnline(null);
-    checkBackendHealth();
-  };
 
   // Component for rendering game cards in chat
   const GameCard: React.FC<{ game: Game }> = ({ game }) => (
@@ -328,13 +217,7 @@ console.log('🔗 API Base URL:', API_BASE_URL);
             </div>
             <div>
               <h3 className="font-bold">AI Game Guru</h3>
-              <div className="flex items-center space-x-2">
-                <p className="text-xs opacity-80">Powered by OpenAI</p>
-                {isBackendOnline !== null && (
-                  <div className={`w-2 h-2 rounded-full ${isBackendOnline ? 'bg-green-400' : 'bg-red-400'}`} 
-                       title={isBackendOnline ? 'Connected' : 'Disconnected'} />
-                )}
-              </div>
+              <p className="text-xs opacity-80">Powered by OpenAI</p>
             </div>
           </div>
           <button
@@ -350,23 +233,12 @@ console.log('🔗 API Base URL:', API_BASE_URL);
             <AlertCircle size={16} className="text-red-500 mt-0.5 flex-shrink-0" />
             <div className="flex-1">
               <p className="text-sm text-red-700">{error}</p>
-              <div className="flex space-x-2 mt-2">
-                <button
-                  onClick={clearError}
-                  className="text-xs text-red-600 hover:text-red-800 underline"
-                >
-                  Dismiss
-                </button>
-                {error.includes('backend') && (
-                  <button
-                    onClick={handleRetryConnection}
-                    className="text-xs text-blue-600 hover:text-blue-800 underline flex items-center space-x-1"
-                  >
-                    <RefreshCw size={10} />
-                    <span>Retry</span>
-                  </button>
-                )}
-              </div>
+              <button
+                onClick={clearError}
+                className="text-xs text-red-600 hover:text-red-800 underline mt-1"
+              >
+                Dismiss
+              </button>
             </div>
           </div>
         )}
@@ -430,24 +302,19 @@ console.log('🔗 API Base URL:', API_BASE_URL);
               onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
               placeholder="Ask me about board games..."
               className="flex-1 p-3 border-2 border-green-200 rounded-lg focus:border-green-400 focus:outline-none bg-white/80 text-sm"
-              disabled={isTyping || isBackendOnline === false}
+              disabled={isTyping}
             />
             <button
               onClick={handleSendMessage}
-              disabled={!inputText.trim() || isTyping || isBackendOnline === false}
+              disabled={!inputText.trim() || isTyping}
               className="p-3 bg-green-500 hover:bg-green-600 disabled:bg-gray-300 text-white rounded-lg transition-colors"
             >
               <Send size={20} />
             </button>
           </div>
-          <div className="flex items-center justify-between mt-2">
-            <p className="text-xs text-gray-500">
-              Powered by OpenAI • Be specific for better recommendations!
-            </p>
-            {isBackendOnline === false && (
-              <p className="text-xs text-red-500">Backend offline</p>
-            )}
-          </div>
+          <p className="text-xs text-gray-500 mt-2 text-center">
+            Powered by OpenAI • Be specific for better recommendations!
+          </p>
         </div>
       </div>
     </div>
