@@ -40,11 +40,10 @@ One inside the backend/ folder
 
 Both .env files should contain the following variables:
 
-env
-Copy
-Edit
+env Copy Edit
 OPENAI_API_KEY=your_openai_api_key
 LOCALHOST_URL=http://localhost:3000
+
 Replace your_openai_api_key with your actual OpenAI API key.
 
 Make sure to restart the development server after adding the .env files so that environment variables are loaded correctly.
